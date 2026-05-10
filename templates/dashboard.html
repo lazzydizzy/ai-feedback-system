@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard · Feedback Analyzer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    /* ════════════════════════════════════════════
+       DESIGN TOKENS  (identical to index.html)
+    ════════════════════════════════════════════ */
+    :root {
+      --bg:        #0a0a0f;
+      --surface:   #111118;
+      --border:    #22222e;
+      --accent:    #7c6aff;
+      --accent-2:  #ff6a8e;
+      --text:      #e8e8f0;
+      --muted:     #666680;
+      --positive:  #3ddc84;
+      --negative:  #ff5e6c;
+      --neutral:   #ffcc44;
+      --radius:    14px;
+      --mono:      'DM Mono', monospace;
+      --sans:      'Syne', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      min-height: 100vh;
+      padding: 2rem 1rem 5rem;
+      background-image:
+        linear-gradient(rgba(124,106,255,.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,106,255,.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    /* ─── Top bar ───────────────────────────────── */
+    .topbar {
+      max-width: 1100px; margin: 0 auto 2.5rem;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 1rem;
+      animation: fadeUp .5s ease both;
+    }
+    .topbar h2 {
+      font-size: 1.6rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--text) 40%, var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .nav { display: flex; gap: .8rem; }
+    .nav a {
+      font-family: var(--mono); font-size: .72rem;
+      letter-spacing: .08em; text-transform: uppercase;
+      padding: .38em 1em; border: 1px solid var(--border);
+      border-radius: 99px; color: var(--muted);
+      text-decoration: none; transition: color .2s, border-color .2s;
+    }
+    .nav a:hover, .nav a.active { color: var(--accent); border-color: var(--accent); }
+
+    /* ─── Grid layout ───────────────────────────── */
+    .grid {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; gap: 1.2rem;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    }
+    .grid.single { grid-template-columns: 1fr; }
+    .grid.two    { grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); }
+
+    /* ─── Stat cards ────────────────────────────── */
+    .stat-row {
+      max-width: 1100px; margin: 0 auto 1.2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 1rem;
+      animation: fadeUp .55s ease both;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.1rem 1.4rem;
+      transition: border-color .2s;
+    }
+    .stat-card:hover { border-color: var(--accent); }
+    .stat-card .val {
+      font-size: 2rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--text), var(--accent));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .stat-card .lbl {
+      font-family: var(--mono); font-size: .68rem;
+      letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
+      margin-top: .25rem;
+    }
+
+    /* ─── Panel card ────────────────────────────── */
+    .panel {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem 1.6rem;
+      animation: fadeUp .6s ease both;
+    }
+    .panel-title {
+      font-family: var(--mono); font-size: .7rem;
+      letter-spacing: .1em; text-transform: uppercase;
+      color: var(--muted); margin-bottom: 1.1rem;
+    }
+
+    /* ─── Summary panel ─────────────────────────── */
+    .summary-text {
+      font-size: .92rem; line-height: 1.7;
+      color: var(--text); background: rgba(124,106,255,.06);
+      border: 1px solid rgba(124,106,255,.18);
+      border-radius: 10px; padding: 1rem 1.2rem;
+    }
+    .summary-text strong { color: var(--accent); font-weight: 600; }
+
+    /* ─── Chart canvas ──────────────────────────── */
+    canvas { max-height: 240px; }
+
+    /* ─── Filters ───────────────────────────────── */
+    .filter-bar {
+      max-width: 1100px; margin: 0 auto 1.2rem;
+      display: flex; flex-wrap: wrap; gap: .7rem; align-items: center;
+      animation: fadeUp .58s ease both;
+    }
+    .filter-bar select,
+    .filter-bar input[type="text"],
+    .filter-bar input[type="date"] {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text);
+      font-family: var(--mono); font-size: .78rem;
+      padding: .42em .85em; outline: none;
+      transition: border-color .2s;
+    }
+    .filter-bar select:focus,
+    .filter-bar input:focus { border-color: var(--accent); }
+    .filter-bar button {
+      padding: .42em 1.1em; border: none;
+      background: var(--accent); color: #fff;
+      font-family: var(--sans); font-size: .8rem;
+      font-weight: 600; border-radius: 8px;
+      cursor: pointer; transition: opacity .2s;
+    }
+    .filter-bar button:hover { opacity: .85; }
+    .filter-bar a.reset-btn {
+      font-family: var(--mono); font-size: .72rem;
+      color: var(--muted); text-decoration: none;
+      padding: .42em .7em; border: 1px solid var(--border);
+      border-radius: 8px; transition: color .2s, border-color .2s;
+    }
+    .filter-bar a.reset-btn:hover { color: var(--accent-2); border-color: var(--accent-2); }
+
+    /* ─── Feedback table ────────────────────────── */
+    .feedback-table { width: 100%; border-collapse: collapse; }
+    .feedback-table th {
+      font-family: var(--mono); font-size: .65rem;
+      letter-spacing: .09em; text-transform: uppercase;
+      color: var(--muted); text-align: left;
+      padding: .55rem .8rem; border-bottom: 1px solid var(--border);
+    }
+    .feedback-table td {
+      font-size: .82rem; color: var(--text);
+      padding: .7rem .8rem; border-bottom: 1px solid rgba(34,34,46,.6);
+      vertical-align: top; line-height: 1.5;
+    }
+    .feedback-table tr:hover td { background: rgba(124,106,255,.04); }
+    .text-cell { max-width: 320px; }
+    .empty-state {
+      text-align: center; padding: 3rem 1rem;
+      color: var(--muted); font-family: var(--mono); font-size: .85rem;
+    }
+
+    /* Reuse pill + emotion styles from index.html */
+    .pill { font-family: var(--mono); font-size: .72rem; font-weight: 500;
+            padding: .25em .75em; border-radius: 99px; letter-spacing: .05em; }
+    .pill.Positive { background: rgba(61,220,132,.15); color: var(--positive); }
+    .pill.Negative { background: rgba(255,94,108,.15);  color: var(--negative); }
+    .pill.Neutral  { background: rgba(255,204,68,.15);  color: var(--neutral); }
+
+    .cat-badge {
+      font-family: var(--mono); font-size: .7rem;
+      padding: .22em .7em; border-radius: 6px;
+      background: rgba(255,106,142,.13);
+      border: 1px solid rgba(255,106,142,.3); color: var(--accent-2);
+    }
+    .emotion-badge { font-family: var(--mono); font-size: .7rem;
+      padding: .22em .7em; border-radius: 6px; }
+    .emotion-badge.Happy        { background:rgba(61,220,132,.13);  color:var(--positive); border:1px solid rgba(61,220,132,.25); }
+    .emotion-badge.Satisfied    { background:rgba(124,106,255,.13); color:var(--accent);   border:1px solid rgba(124,106,255,.25); }
+    .emotion-badge.Frustrated   { background:rgba(255,204,68,.13);  color:var(--neutral);  border:1px solid rgba(255,204,68,.25); }
+    .emotion-badge.Angry        { background:rgba(255,94,108,.2);   color:var(--negative); border:1px solid rgba(255,94,108,.3); }
+    .emotion-badge.Disappointed { background:rgba(255,106,142,.13); color:var(--accent-2); border:1px solid rgba(255,106,142,.25); }
+
+    .ts { font-family: var(--mono); font-size: .65rem; color: var(--muted); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(14px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @media (max-width: 600px) {
+      .grid.two { grid-template-columns: 1fr; }
+      .text-cell { max-width: 160px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Top bar ──────────────────────────────────────── -->
+  <div class="topbar">
+    <h2>Analytics Dashboard</h2>
+    <nav class="nav">
+      <a href="/">Analyze</a>
+      <a href="/dashboard" class="active">Dashboard</a>
+    </nav>
+  </div>
+
+  <!-- ── KPI stat row ──────────────────────────────────── -->
+  <div class="stat-row">
+    <div class="stat-card">
+      <div class="val">{{ total }}</div>
+      <div class="lbl">Total Entries</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" style="color:var(--positive)">{{ sent_counts.get('Positive', 0) }}</div>
+      <div class="lbl">Positive</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" style="color:var(--negative)">{{ sent_counts.get('Negative', 0) }}</div>
+      <div class="lbl">Negative</div>
+    </div>
+    <div class="stat-card">
+      <div class="val" style="color:var(--neutral)">{{ sent_counts.get('Neutral', 0) }}</div>
+      <div class="lbl">Neutral</div>
+    </div>
+    {% if cat_counts %}
+    <div class="stat-card">
+      <div class="val" style="color:var(--accent-2)">{{ cat_counts | dictsort(by='value') | last | first }}</div>
+      <div class="lbl">Top Category</div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── AI Summary ────────────────────────────────────── -->
+  <div class="grid single" style="max-width:1100px;margin:0 auto 1.2rem;">
+    <div class="panel">
+      <p class="panel-title">✦ AI Feedback Summary</p>
+      <div class="summary-text">{{ summary | replace('**','') }}</div>
+    </div>
+  </div>
+
+  <!-- ── Charts row 1: Sentiment pie + Category bar ──────── -->
+  <div class="grid two" style="max-width:1100px;margin:0 auto 1.2rem;">
+    <div class="panel">
+      <p class="panel-title">Sentiment Distribution</p>
+      <canvas id="sentPie"></canvas>
+    </div>
+    <div class="panel">
+      <p class="panel-title">Category Distribution</p>
+      <canvas id="catBar"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Charts row 2: Trend line + Keyword bar ──────────── -->
+  <div class="grid two" style="max-width:1100px;margin:0 auto 1.2rem;">
+    <div class="panel">
+      <p class="panel-title">Sentiment Trend (Last 14 Days)</p>
+      <canvas id="trendLine"></canvas>
+    </div>
+    <div class="panel">
+      <p class="panel-title">Top Keywords &amp; Issues</p>
+      <canvas id="kwBar"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Emotion chart ─────────────────────────────────── -->
+  <div class="grid single" style="max-width:1100px;margin:0 auto 1.2rem;">
+    <div class="panel">
+      <p class="panel-title">Emotion Breakdown</p>
+      <canvas id="emoBar" style="max-height:180px;"></canvas>
+    </div>
+  </div>
+
+  <!-- ── Filters ───────────────────────────────────────── -->
+  <form class="filter-bar" method="GET" action="/dashboard">
+    <select name="sentiment">
+      <option value="">All Sentiments</option>
+      <option value="Positive" {% if filters.sentiment=='Positive' %}selected{% endif %}>Positive</option>
+      <option value="Negative" {% if filters.sentiment=='Negative' %}selected{% endif %}>Negative</option>
+      <option value="Neutral"  {% if filters.sentiment=='Neutral'  %}selected{% endif %}>Neutral</option>
+    </select>
+    <select name="category">
+      <option value="">All Categories</option>
+      {% for cat in ['Product','Delivery','Service','Pricing','General'] %}
+      <option value="{{ cat }}" {% if filters.category==cat %}selected{% endif %}>{{ cat }}</option>
+      {% endfor %}
+    </select>
+    <input type="date" name="date" value="{{ filters.date }}"/>
+    <input type="text" name="search" placeholder="Search text…" value="{{ filters.search }}"/>
+    <button type="submit">Filter</button>
+    <a href="/dashboard" class="reset-btn">Reset</a>
+  </form>
+
+  <!-- ── Feedback table ────────────────────────────────── -->
+  <div class="grid single" style="max-width:1100px;margin:0 auto;">
+    <div class="panel">
+      <p class="panel-title">Feedback Entries</p>
+      {% if rows %}
+      <div style="overflow-x:auto;">
+        <table class="feedback-table">
+          <thead>
+            <tr>
+              <th>Feedback</th>
+              <th>Sentiment</th>
+              <th>Score</th>
+              <th>Category</th>
+              <th>Emotion</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr>
+              <td class="text-cell">{{ row.text[:120] }}{% if row.text|length > 120 %}…{% endif %}</td>
+              <td><span class="pill {{ row.sentiment }}">{{ row.sentiment }}</span></td>
+              <td style="font-family:var(--mono);font-size:.78rem;">{{ "%.3f"|format(row.compound) }}</td>
+              <td><span class="cat-badge">{{ row.category }}</span></td>
+              <td><span class="emotion-badge {{ row.emotion }}">{{ row.emotion }}</span></td>
+              <td class="ts">{{ row.timestamp[:16] }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state">No feedback found for the selected filters.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- ══ Chart.js setup ════════════════════════════════════ -->
+  <script>
+    // ── Shared dark theme defaults ─────────────────────────
+    Chart.defaults.color          = '#666680';
+    Chart.defaults.borderColor    = '#22222e';
+    Chart.defaults.font.family    = "'DM Mono', monospace";
+    Chart.defaults.font.size      = 11;
+
+    const ACCENT   = '#7c6aff';
+    const ACCENT2  = '#ff6a8e';
+    const POS      = '#3ddc84';
+    const NEG      = '#ff5e6c';
+    const NEU      = '#ffcc44';
+    const SURFACE  = '#111118';
+
+    // ── 1. Sentiment Pie ───────────────────────────────────
+    const sentData = {{ sent_counts | tojson }};
+    new Chart(document.getElementById('sentPie'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(sentData),
+        datasets: [{
+          data: Object.values(sentData),
+          backgroundColor: [POS, NEG, NEU, ACCENT],
+          borderColor: '#0a0a0f',
+          borderWidth: 3,
+          hoverOffset: 8,
+        }]
+      },
+      options: {
+        cutout: '65%',
+        animation: { animateRotate: true, duration: 900 },
+        plugins: { legend: { position: 'bottom', labels: { padding: 16, usePointStyle: true } } }
+      }
+    });
+
+    // ── 2. Category Bar ────────────────────────────────────
+    const catData = {{ cat_counts | tojson }};
+    new Chart(document.getElementById('catBar'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(catData),
+        datasets: [{
+          label: 'Entries',
+          data: Object.values(catData),
+          backgroundColor: [ACCENT, ACCENT2, POS, NEU, NEG],
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        animation: { duration: 900 },
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: '#22222e' }, ticks: { stepSize: 1 } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    // ── 3. Trend Line ──────────────────────────────────────
+    const tLabels = {{ trend_labels | safe }};
+    const tPos    = {{ trend_pos    | safe }};
+    const tNeg    = {{ trend_neg    | safe }};
+    const tNeu    = {{ trend_neu    | safe }};
+    new Chart(document.getElementById('trendLine'), {
+      type: 'line',
+      data: {
+        labels: tLabels,
+        datasets: [
+          { label: 'Positive', data: tPos, borderColor: POS, backgroundColor: 'rgba(61,220,132,.1)',
+            tension: .4, fill: true, pointRadius: 3 },
+          { label: 'Negative', data: tNeg, borderColor: NEG, backgroundColor: 'rgba(255,94,108,.1)',
+            tension: .4, fill: true, pointRadius: 3 },
+          { label: 'Neutral',  data: tNeu, borderColor: NEU, backgroundColor: 'rgba(255,204,68,.06)',
+            tension: .4, fill: true, pointRadius: 3 },
+        ]
+      },
+      options: {
+        animation: { duration: 1000 },
+        plugins: { legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true } } },
+        scales: {
+          y: { grid: { color: '#22222e' }, ticks: { stepSize: 1 } },
+          x: { grid: { display: false }, ticks: {
+            maxTicksLimit: 7,
+            callback: (v, i) => tLabels[i].slice(5)   // show MM-DD
+          }}
+        }
+      }
+    });
+
+    // ── 4. Keyword Bar ─────────────────────────────────────
+    const kwData = {{ kw_freq | tojson }};
+    new Chart(document.getElementById('kwBar'), {
+      type: 'bar',
+      data: {
+        labels: kwData.map(k => k[0]),
+        datasets: [{
+          label: 'Frequency',
+          data: kwData.map(k => k[1]),
+          backgroundColor: kwData.map((_, i) =>
+            [ACCENT, ACCENT2, POS, NEU, NEG, '#5ae5ff', '#c77dff', '#ff9f43', '#a29bfe', '#fd79a8'][i % 10]
+          ),
+          borderRadius: 5,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        indexAxis: 'y',          // horizontal bars
+        animation: { duration: 900 },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#22222e' }, ticks: { stepSize: 1 } },
+          y: { grid: { display: false } }
+        }
+      }
+    });
+
+    // ── 5. Emotion Bar ─────────────────────────────────────
+    const emoData = {{ emo_counts | tojson }};
+    const emoColors = {
+      Happy: POS, Satisfied: ACCENT, Frustrated: NEU,
+      Angry: NEG, Disappointed: ACCENT2
+    };
+    new Chart(document.getElementById('emoBar'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(emoData),
+        datasets: [{
+          label: 'Count',
+          data: Object.values(emoData),
+          backgroundColor: Object.keys(emoData).map(e => emoColors[e] || ACCENT),
+          borderRadius: 6,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        animation: { duration: 900 },
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: '#22222e' }, ticks: { stepSize: 1 } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+  </script>
+
+</body>
+</html>
